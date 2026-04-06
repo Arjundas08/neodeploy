@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeoDeploy - CI/CD Dashboard</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- ========================================
+         HEADER
+    ======================================== -->
+    <header class="header">
+        <div class="header-left">
+            <i class="fas fa-rocket logo-icon"></i>
+            <h1>NeoDeploy</h1>
+            <span class="version">v1.0.0</span>
+        </div>
+        <div class="header-right">
+            <div class="status-indicator" id="appStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">Checking...</span>
+            </div>
+            <button class="btn btn-primary" onclick="triggerDeploy()">
+                <i class="fas fa-play"></i> Deploy Now
+            </button>
+        </div>
+    </header>
+
+    <!-- ========================================
+         MAIN DASHBOARD
+    ======================================== -->
+    <main class="dashboard">
+        <!-- Stats Cards Row -->
+        <section class="stats-row">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-rocket"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value" id="totalDeploys">0</span>
+                    <span class="stat-label">Total Deploys</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value" id="successCount">0</span>
+                    <span class="stat-label">Successful</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon red">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value" id="failedCount">0</span>
+                    <span class="stat-label">Failed</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-percentage"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value" id="successRate">100%</span>
+                    <span class="stat-label">Success Rate</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value" id="uptime">00:00:00</span>
+                    <span class="stat-label">Uptime</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Current Deploy Status -->
+        <section class="current-deploy" id="currentDeploySection" style="display: none;">
+            <h2><i class="fas fa-cog fa-spin"></i> Current Deployment</h2>
+            <div class="deploy-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-stages">
+                    <div class="stage" id="stage-pending">
+                        <i class="fas fa-hourglass-start"></i>
+                        <span>Pending</span>
+                    </div>
+                    <div class="stage" id="stage-building">
+                        <i class="fas fa-hammer"></i>
+                        <span>Building</span>
+                    </div>
+                    <div class="stage" id="stage-testing">
+                        <i class="fas fa-vial"></i>
+                        <span>Testing</span>
+                    </div>
+                    <div class="stage" id="stage-deploying">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Deploying</span>
+                    </div>
+                    <div class="stage" id="stage-done">
+                        <i class="fas fa-check"></i>
+                        <span>Done</span>
+                    </div>
+                </div>
+            </div>
+            <div class="deploy-info">
+                <span><strong>Build ID:</strong> <code id="currentBuildId">-</code></span>
+                <span><strong>Status:</strong> <span id="currentStatus" class="badge">-</span></span>
+                <span><strong>Message:</strong> <span id="currentMessage">-</span></span>
+            </div>
+        </section>
+
+        <!-- Deployment History -->
+        <section class="deploy-history">
+            <div class="section-header">
+                <h2><i class="fas fa-history"></i> Deployment History</h2>
+                <button class="btn btn-secondary" onclick="refreshDashboard()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div class="table-container">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Build ID</th>
+                            <th>Status</th>
+                            <th>Triggered By</th>
+                            <th>Start Time</th>
+                            <th>Duration</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr>
+                            <td colspan="6" class="no-data">No deployments yet. Click "Deploy Now" to start!</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Pipeline Visualization -->
+        <section class="pipeline-viz">
+            <h2><i class="fas fa-project-diagram"></i> CI/CD Pipeline</h2>
+            <div class="pipeline-flow">
+                <div class="pipeline-step">
+                    <div class="step-icon"><i class="fab fa-git-alt"></i></div>
+                    <span>Git Push</span>
+                </div>
+                <div class="pipeline-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="pipeline-step">
+                    <div class="step-icon"><i class="fab fa-jenkins"></i></div>
+                    <span>Jenkins</span>
+                </div>
+                <div class="pipeline-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="pipeline-step">
+                    <div class="step-icon"><i class="fas fa-cogs"></i></div>
+                    <span>Maven Build</span>
+                </div>
+                <div class="pipeline-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="pipeline-step">
+                    <div class="step-icon"><i class="fas fa-vial"></i></div>
+                    <span>JUnit Tests</span>
+                </div>
+                <div class="pipeline-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="pipeline-step">
+                    <div class="step-icon"><i class="fab fa-docker"></i></div>
+                    <span>Docker</span>
+                </div>
+                <div class="pipeline-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="pipeline-step">
+                    <div class="step-icon"><i class="fas fa-play-circle"></i></div>
+                    <span>Ansible Deploy</span>
+                </div>
+                <div class="pipeline-arrow"><i class="fas fa-arrow-right"></i></div>
+                <div class="pipeline-step success">
+                    <div class="step-icon"><i class="fas fa-heart"></i></div>
+                    <span>Health Check</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ========================================
+         FOOTER
+    ======================================== -->
+    <footer class="footer">
+        <p>NeoDeploy CI/CD Pipeline &copy; 2026 | Built with Spring Boot, Docker, Jenkins, Ansible</p>
+    </footer>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

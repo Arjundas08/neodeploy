@@ -1,0 +1,145 @@
+# ==========================================
+# Self-Healing Playbook
+# ==========================================
+#
+# WHAT IS SELF-HEALING?
+# If your app crashes, this playbook automatically restarts it.
+# It runs every 30 seconds via cron job and checks if the container is healthy.
+#
+# HOW IT WORKS:
+# 1. Check if container is running
+# 2. Check if health endpoint returns 200
+# 3. If either fails → restart container
+# 4. Send notification (optional)
+#
+# SET UP CRON (run in WSL2):
+#   crontab -e
+#   Add this line:
+#   * * * * * cd /path/to/ansible && ansible-playbook -i inventory.ini self-heal.yml >> /var/log/self-heal.log 2>&1
+# ==========================================
+
+---
+- name: Self-Healing Check for NeoDeploy
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    app_name: neodeploy
+    container_name: neodeploy-app
+    app_port: 8080
+    docker_image: neodeploy:latest
+    health_url: "http://localhost:{{ app_port }}/api/health"
+    log_file: /tmp/neodeploy-selfheal.log
+  
+  tasks:
+    # ========================================
+    # Step 1: Check if container exists and is running
+    # ========================================
+    - name: Check container status
+      command: docker inspect --format '{{ '{{' }}.State.Running{{ '}}' }}' {{ container_name }}
+      register: container_status
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Log container status
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ ansible_date_time.iso8601 }}] Container running: {{ container_status.stdout | default('NOT_FOUND') }}"
+        create: yes
+
+    # ========================================
+    # Step 2: Check health endpoint
+    # ========================================
+    - name: Check application health
+      uri:
+        url: "{{ health_url }}"
+        method: GET
+        return_content: yes
+        status_code: 200
+        timeout: 10
+      register: health_check
+      ignore_errors: yes
+      when: container_status.stdout == 'true'
+      
+    - name: Log health check result
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ ansible_date_time.iso8601 }}] Health check: {{ 'PASS' if health_check.status == 200 else 'FAIL' }}"
+        create: yes
+      when: container_status.stdout == 'true'
+
+    # ========================================
+    # Step 3: Self-heal if needed
+    # ========================================
+    - name: Determine if restart needed
+      set_fact:
+        needs_restart: "{{ container_status.rc != 0 or container_status.stdout != 'true' or (health_check.status | default(0)) != 200 }}"
+        
+    - name: Log restart decision
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ ansible_date_time.iso8601 }}] Restart needed: {{ needs_restart }}"
+        create: yes
+
+    - name: Stop failed container
+      docker_container:
+        name: "{{ container_name }}"
+        state: absent
+      when: needs_restart | bool
+      ignore_errors: yes
+
+    - name: Start fresh container
+      docker_container:
+        name: "{{ container_name }}"
+        image: "{{ docker_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ app_port }}:8080"
+        env:
+          SPRING_PROFILES_ACTIVE: "docker"
+      when: needs_restart | bool
+      register: restart_result
+
+    - name: Log restart action
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ ansible_date_time.iso8601 }}] 🔄 CONTAINER RESTARTED - Self-healing activated!"
+        create: yes
+      when: needs_restart | bool and restart_result.changed
+
+    # ========================================
+    # Step 4: Verify restart worked
+    # ========================================
+    - name: Wait for app to start after restart
+      pause:
+        seconds: 30
+      when: needs_restart | bool and restart_result.changed
+
+    - name: Verify health after restart
+      uri:
+        url: "{{ health_url }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: post_restart_health
+      when: needs_restart | bool and restart_result.changed
+      ignore_errors: yes
+
+    - name: Log final status
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ ansible_date_time.iso8601 }}] ✅ Post-restart health: {{ 'PASS' if (post_restart_health.status | default(0)) == 200 else 'FAIL' }}"
+        create: yes
+      when: needs_restart | bool and restart_result.changed
+
+    # ========================================
+    # All good - just log it
+    # ========================================
+    - name: Log healthy status
+      lineinfile:
+        path: "{{ log_file }}"
+        line: "[{{ ansible_date_time.iso8601 }}] ✅ All systems operational"
+        create: yes
+      when: not (needs_restart | bool)

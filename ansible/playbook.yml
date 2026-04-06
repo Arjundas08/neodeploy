@@ -1,0 +1,140 @@
+# ==========================================
+# Ansible Playbook - Deployment Automation
+# ==========================================
+#
+# WHAT IS THIS FILE?
+# Ansible is like a remote control for servers.
+# This playbook tells Ansible how to deploy our app.
+#
+# WHAT IT DOES:
+# 1. Pulls latest Docker image
+# 2. Stops old container (if running)
+# 3. Starts new container
+# 4. Runs health check
+#
+# HOW TO RUN:
+#   ansible-playbook -i inventory.ini playbook.yml
+#
+# RUNS FROM: WSL2 Ubuntu (Ansible doesn't run on Windows)
+# ==========================================
+
+---
+- name: Deploy NeoDeploy Application
+  hosts: webservers
+  become: yes                    # Run as sudo
+  
+  vars:
+    app_name: neodeploy
+    app_port: 8080
+    docker_image: neodeploy:latest
+    # Override with: --extra-vars "docker_tag=42"
+    docker_tag: "{{ lookup('env', 'DOCKER_TAG') | default('latest', true) }}"
+    health_check_url: "http://localhost:{{ app_port }}/api/health"
+    max_retries: 5
+    retry_delay: 10
+  
+  tasks:
+    # ========================================
+    # Task 1: Ensure Docker is installed
+    # ========================================
+    - name: Check Docker is installed
+      command: docker --version
+      register: docker_version
+      changed_when: false
+      
+    - name: Display Docker version
+      debug:
+        msg: "Docker version: {{ docker_version.stdout }}"
+
+    # ========================================
+    # Task 2: Pull latest Docker image
+    # ========================================
+    - name: Pull latest Docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+        force_source: yes
+      register: pull_result
+      
+    - name: Show pull result
+      debug:
+        msg: "Image pulled: {{ pull_result.changed }}"
+
+    # ========================================
+    # Task 3: Stop existing container
+    # ========================================
+    - name: Stop existing container (if running)
+      docker_container:
+        name: "{{ app_name }}-app"
+        state: absent
+      ignore_errors: yes
+
+    # ========================================
+    # Task 4: Start new container
+    # ========================================
+    - name: Start new container
+      docker_container:
+        name: "{{ app_name }}-app"
+        image: "{{ docker_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ app_port }}:8080"
+        env:
+          SPRING_PROFILES_ACTIVE: "docker"
+      register: container_result
+      
+    - name: Show container info
+      debug:
+        msg: "Container ID: {{ container_result.container.Id[:12] }}"
+
+    # ========================================
+    # Task 5: Wait for application to start
+    # ========================================
+    - name: Wait for application to start
+      pause:
+        seconds: 30
+      when: container_result.changed
+
+    # ========================================
+    # Task 6: Health Check
+    # ========================================
+    - name: Verify application health
+      uri:
+        url: "{{ health_check_url }}"
+        method: GET
+        return_content: yes
+        status_code: 200
+      register: health_check
+      retries: "{{ max_retries }}"
+      delay: "{{ retry_delay }}"
+      until: health_check.status == 200
+      
+    - name: Display health status
+      debug:
+        msg: "Application Status: {{ health_check.json.status }}"
+
+    # ========================================
+    # Task 7: Success message
+    # ========================================
+    - name: Deployment successful
+      debug:
+        msg: |
+          ==========================================
+          ✅ DEPLOYMENT SUCCESSFUL!
+          ==========================================
+          Application: {{ app_name }}
+          Container: {{ app_name }}-app
+          URL: http://localhost:{{ app_port }}
+          Health: {{ health_check_url }}
+          Status: {{ health_check.json.status }}
+          ==========================================
+
+  # ========================================
+  # Error Handling
+  # ========================================
+  handlers:
+    - name: Restart container
+      docker_container:
+        name: "{{ app_name }}-app"
+        state: restarted

@@ -1,0 +1,89 @@
+# ==========================================
+# Docker Compose - Multi-Container Setup
+# ==========================================
+#
+# WHAT IS DOCKER COMPOSE?
+# Runs multiple containers together with ONE command.
+# Instead of manually starting app + database separately,
+# just run: docker-compose up
+#
+# WHAT THIS FILE DOES:
+# 1. Starts MySQL database container
+# 2. Starts NeoDeploy app container
+# 3. Connects them on the same network
+# 4. Sets up volumes for data persistence
+#
+# HOW TO USE:
+#   docker-compose up -d        # Start in background
+#   docker-compose logs -f      # View logs
+#   docker-compose down         # Stop everything
+# ==========================================
+
+version: '3.8'
+
+services:
+  # ========================================
+  # NeoDeploy Application
+  # ========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neodeploy-app
+    ports:
+      - "8080:8080"           # Map host:container ports
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/neodeploydb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=rootpassword
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      db:
+        condition: service_healthy   # Wait for DB to be ready
+    networks:
+      - neodeploy-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ========================================
+  # MySQL Database
+  # ========================================
+  db:
+    image: mysql:8.0
+    container_name: neodeploy-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=neodeploydb
+    ports:
+      - "3306:3306"           # Expose for debugging
+    volumes:
+      - mysql_data:/var/lib/mysql    # Persist data
+    networks:
+      - neodeploy-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+# ========================================
+# Shared Network
+# ========================================
+networks:
+  neodeploy-network:
+    driver: bridge
+
+# ========================================
+# Persistent Volume
+# ========================================
+volumes:
+  mysql_data:
+    driver: local

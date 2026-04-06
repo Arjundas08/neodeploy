@@ -1,0 +1,92 @@
+# ==========================================
+# Git Ignore for NeoDeploy
+# ==========================================
+
+# Compiled Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# IDE - Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# IDE - VS Code
+.vscode/
+*.code-workspace
+
+# IDE - NetBeans
+nbproject/
+build/
+nbbuild/
+dist/
+nbdist/
+nbactions.xml
+nb-configuration.xml
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Secrets (NEVER commit these!)
+**/secrets/
+*.pem
+*.key
+credentials.yml
+
+# Docker
+.docker/
+
+# Node (if using npm for frontend)
+node_modules/
+npm-debug.log
+
+# Test output
+test-output/
+surefire-reports/
+
+# Coverage reports (optional - might want to keep)
+# jacoco.exec
+
+# H2 database files
+*.db
+*.mv.db
+*.trace.db
+
+# Application properties with secrets
+application-local.properties
+application-prod.properties

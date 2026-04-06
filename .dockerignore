@@ -1,0 +1,5 @@
+# Ignore everything in target
+target/
+
+# But keep JAR for Docker context if pre-building
+!target/*.jar
