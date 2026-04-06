@@ -185,4 +185,4 @@ This project is for educational purposes.
 
 Made with ❤️ for DevOps learning
 
-## Demo - 04/06/2026 09:00:09
+## Demo - 04/06/2026

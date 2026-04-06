@@ -140,39 +140,104 @@ public class DeployController {
     }
     
     /**
-     * Trigger Jenkins Pipeline
+     * Trigger Jenkins Pipeline Build
      * URL: POST /api/jenkins/build
      * 
-     * This calls Jenkins API to start a real pipeline build!
+     * This calls Jenkins API to start a REAL pipeline build!
+     * Handles CSRF crumb and authentication properly.
      */
     @PostMapping("/jenkins/build")
     public ResponseEntity<Map<String, Object>> triggerJenkins() {
         Map<String, Object> response = new HashMap<>();
+        
         try {
-            // Call Jenkins to trigger build
-            String jenkinsUrl = "http://localhost:8081/job/neodeploy-pipeline/build";
+            String jenkinsBaseUrl = "http://localhost:8081";
+            String jobName = "neodeploy-pipeline";
             
-            java.net.URL url = new java.net.URL(jenkinsUrl);
+            // Step 1: Get CSRF crumb from Jenkins
+            String crumb = null;
+            String crumbField = null;
+            
+            try {
+                java.net.URL crumbUrl = new java.net.URL(jenkinsBaseUrl + "/crumbIssuer/api/json");
+                java.net.HttpURLConnection crumbConn = (java.net.HttpURLConnection) crumbUrl.openConnection();
+                crumbConn.setRequestMethod("GET");
+                crumbConn.setConnectTimeout(5000);
+                
+                if (crumbConn.getResponseCode() == 200) {
+                    java.io.BufferedReader in = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(crumbConn.getInputStream()));
+                    StringBuilder content = new StringBuilder();
+                    String inputLine;
+                    while ((inputLine = in.readLine()) != null) {
+                        content.append(inputLine);
+                    }
+                    in.close();
+                    
+                    // Parse JSON manually (simple approach)
+                    String json = content.toString();
+                    if (json.contains("crumb") && json.contains("crumbRequestField")) {
+                        // Extract crumb value
+                        int crumbStart = json.indexOf("\"crumb\":\"") + 9;
+                        int crumbEnd = json.indexOf("\"", crumbStart);
+                        crumb = json.substring(crumbStart, crumbEnd);
+                        
+                        // Extract crumbRequestField value
+                        int fieldStart = json.indexOf("\"crumbRequestField\":\"") + 21;
+                        int fieldEnd = json.indexOf("\"", fieldStart);
+                        crumbField = json.substring(fieldStart, fieldEnd);
+                    }
+                }
+                crumbConn.disconnect();
+            } catch (Exception e) {
+                // Continue without crumb if not available
+                System.out.println("Could not get Jenkins crumb: " + e.getMessage());
+            }
+            
+            // Step 2: Trigger the build WITH TOKEN (using GET - works with Jenkins remote trigger)
+            String buildToken = "neodeploy-token-2026";
+            String buildUrl = jenkinsBaseUrl + "/job/" + jobName + "/build?token=" + buildToken;
+            java.net.URL url = new java.net.URL(buildUrl);
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setConnectTimeout(5000);
+            conn.setRequestMethod("GET");  // Jenkins token-based trigger works with GET
+            conn.setConnectTimeout(10000);
+            
+            // Add CSRF crumb header if we got one
+            if (crumb != null && crumbField != null) {
+                conn.setRequestProperty(crumbField, crumb);
+            }
             
             int responseCode = conn.getResponseCode();
+            conn.disconnect();
             
             if (responseCode == 201 || responseCode == 200) {
                 response.put("success", true);
-                response.put("message", "Jenkins build triggered! Check Jenkins dashboard.");
-                response.put("jenkinsUrl", "http://localhost:8081/job/neodeploy-pipeline");
+                response.put("message", "✅ Jenkins build triggered successfully!");
+                response.put("jenkinsUrl", jenkinsBaseUrl + "/job/" + jobName);
+                response.put("status", "BUILD_STARTED");
+            } else if (responseCode == 403) {
+                // 403 means authentication required
+                response.put("success", false);
+                response.put("message", "Jenkins requires authentication. Please login to Jenkins first.");
+                response.put("jenkinsUrl", jenkinsBaseUrl + "/login");
+                response.put("status", "AUTH_REQUIRED");
+                response.put("hint", "Login to Jenkins at http://localhost:8081 then try again");
             } else {
                 response.put("success", false);
                 response.put("message", "Jenkins returned code: " + responseCode);
+                response.put("status", "ERROR");
             }
-            conn.disconnect();
             
+        } catch (java.net.ConnectException e) {
+            response.put("success", false);
+            response.put("message", "Cannot connect to Jenkins. Is it running?");
+            response.put("status", "CONNECTION_FAILED");
         } catch (Exception e) {
             response.put("success", false);
-            response.put("message", "Failed to trigger Jenkins: " + e.getMessage());
+            response.put("message", "Error: " + e.getMessage());
+            response.put("status", "ERROR");
         }
+        
         return ResponseEntity.ok(response);
     }
 }
