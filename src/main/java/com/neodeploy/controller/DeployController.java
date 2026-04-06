@@ -138,4 +138,41 @@ public class DeployController {
         response.put("version", "1.0.0");
         return ResponseEntity.ok(response);
     }
+    
+    /**
+     * Trigger Jenkins Pipeline
+     * URL: POST /api/jenkins/build
+     * 
+     * This calls Jenkins API to start a real pipeline build!
+     */
+    @PostMapping("/jenkins/build")
+    public ResponseEntity<Map<String, Object>> triggerJenkins() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            // Call Jenkins to trigger build
+            String jenkinsUrl = "http://localhost:8081/job/neodeploy-pipeline/build";
+            
+            java.net.URL url = new java.net.URL(jenkinsUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(5000);
+            
+            int responseCode = conn.getResponseCode();
+            
+            if (responseCode == 201 || responseCode == 200) {
+                response.put("success", true);
+                response.put("message", "Jenkins build triggered! Check Jenkins dashboard.");
+                response.put("jenkinsUrl", "http://localhost:8081/job/neodeploy-pipeline");
+            } else {
+                response.put("success", false);
+                response.put("message", "Jenkins returned code: " + responseCode);
+            }
+            conn.disconnect();
+            
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Failed to trigger Jenkins: " + e.getMessage());
+        }
+        return ResponseEntity.ok(response);
+    }
 }

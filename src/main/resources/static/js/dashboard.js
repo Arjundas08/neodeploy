@@ -70,6 +70,33 @@ async function refreshDashboard() {
 }
 
 /**
+ * Trigger Jenkins Pipeline Build
+ */
+async function triggerJenkinsBuild() {
+    try {
+        showToast('Triggering Jenkins pipeline...', 'info');
+        
+        const response = await fetch(`${API_BASE}/jenkins/build`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Jenkins build started! Check Jenkins dashboard.', 'success');
+            // Open Jenkins in new tab
+            window.open('http://localhost:8081/job/neodeploy-pipeline', '_blank');
+        } else {
+            showToast('Failed: ' + result.message, 'error');
+        }
+        
+    } catch (error) {
+        console.error('Jenkins trigger failed:', error);
+        showToast('Failed to trigger Jenkins: ' + error.message, 'error');
+    }
+}
+
+/**
  * Trigger a new deployment
  */
 async function triggerDeploy() {
