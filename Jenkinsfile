@@ -8,7 +8,7 @@ pipeline {
     agent any
 
     environment {
-        PROJECT_PATH = 'C:\\Users\\hp\\OneDrive\\Desktop\\Neo-Deploy'
+        // Use Jenkins workspace (code is cloned here from GitHub)
         MVN_PATH = 'C:\\Program Files\\Maven\\bin\\mvn'
         DOCKER_PATH = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker'
         DOCKER_IMAGE = 'neodeploy'
@@ -22,21 +22,22 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building application with Maven...'
-                bat "\"${MVN_PATH}\" -f \"${PROJECT_PATH}\\pom.xml\" clean package -DskipTests -B"
+                // Build from workspace (current directory after checkout)
+                bat "\"${MVN_PATH}\" clean package -DskipTests -B"
             }
         }
 
         stage('Test') {
             steps {
                 echo 'Running JUnit Tests...'
-                bat "\"${MVN_PATH}\" -f \"${PROJECT_PATH}\\pom.xml\" test -B"
+                bat "\"${MVN_PATH}\" test -B"
             }
         }
 
         stage('Docker Build') {
             steps {
                 echo 'Building Docker Image...'
-                bat "cd /d \"${PROJECT_PATH}\" && \"${DOCKER_PATH}\" build -t ${DOCKER_IMAGE}:latest ."
+                bat "\"${DOCKER_PATH}\" build -t ${DOCKER_IMAGE}:latest ."
             }
         }
 
@@ -52,7 +53,7 @@ pipeline {
                 echo 'Deploying Container...'
                 bat "\"${DOCKER_PATH}\" stop ${CONTAINER_NAME} || exit 0"
                 bat "\"${DOCKER_PATH}\" rm ${CONTAINER_NAME} || exit 0"
-                bat "\"${DOCKER_PATH}\" run -d --name ${CONTAINER_NAME} -p ${APP_PORT}:9090 ${DOCKER_IMAGE}:latest"
+                bat "\"${DOCKER_PATH}\" run -d --name ${CONTAINER_NAME} -p ${APP_PORT}:8080 ${DOCKER_IMAGE}:latest"
             }
         }
 
